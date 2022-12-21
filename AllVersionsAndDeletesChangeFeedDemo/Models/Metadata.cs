@@ -1,16 +1,13 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 
 namespace AllVersionsAndDeletesChangeFeedDemo.Models
 {
     internal class Metadata
     {
         [JsonProperty("operationType")]
-        public string operationType { get; set; }
+        public string OperationType { get; set; }
 
         [JsonProperty("timeToLiveExpired")]
-        public Boolean timeToLiveExpired { get; set; }
-
-        [JsonProperty("previousImage")]
-        public Item previousImage { get; set; }
+        public Boolean? TimeToLiveExpired { get; set; }
     }
 }

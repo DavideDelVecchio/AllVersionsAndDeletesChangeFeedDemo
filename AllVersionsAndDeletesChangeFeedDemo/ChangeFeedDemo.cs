@@ -3,7 +3,6 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
 using AllVersionsAndDeletesChangeFeedDemo.Models;
 
-
 namespace AllVersionsAndDeletesChangeFeedDemo
 {
     internal class ChangeFeedDemo
@@ -44,20 +43,19 @@ namespace AllVersionsAndDeletesChangeFeedDemo
 
         public async Task CreateAllVersionsAndDeletesChangeFeedIterator()
         {
+            Console.WriteLine("Creating ChangeFeedIterator to read the change feed in All Versions and Deletes mode.");
+
             allVersionsContinuationToken = null;
-            FeedIterator<ItemWithMetadata> allVersionsIterator = container
-                .GetChangeFeedIterator<ItemWithMetadata>(ChangeFeedStartFrom.Now(), ChangeFeedMode.FullFidelity);
+            FeedIterator<dynamic> allVersionsIterator = container
+                .GetChangeFeedIterator<dynamic>(ChangeFeedStartFrom.Now(), ChangeFeedMode.FullFidelity);
 
             while (allVersionsIterator.HasMoreResults)
             {
-                try
+                FeedResponse<dynamic> response = await allVersionsIterator.ReadNextAsync();
+
+                if (response.StatusCode == HttpStatusCode.NotModified)
                 {
-                    FeedResponse<ItemWithMetadata> items = await allVersionsIterator.ReadNextAsync();
-                }
-                catch (CosmosException cosmosException) when (cosmosException.StatusCode == HttpStatusCode.NotModified)
-                {
-                    allVersionsContinuationToken = cosmosException.Headers.ContinuationToken;
-                    Console.WriteLine("Created ChangeFeedIterator to read the change feed in All Versions and Deletes mode.");
+                    allVersionsContinuationToken = response.ContinuationToken;
                     break;
                 }
             }
@@ -65,20 +63,19 @@ namespace AllVersionsAndDeletesChangeFeedDemo
 
         public async Task CreateLatestVersionChangeFeedIterator()
         {
+            Console.WriteLine("Creating ChangeFeedIterator to read the change feed in Latest Version mode.");
+
             latestVersionContinuationToken = null;
-            FeedIterator<Item> incrementalIterator = container
+            FeedIterator<Item> latestVersionIterator = container
                 .GetChangeFeedIterator<Item>(ChangeFeedStartFrom.Now(), ChangeFeedMode.Incremental);
 
-            while (incrementalIterator.HasMoreResults)
+            while (latestVersionIterator.HasMoreResults)
             {
-                try
+                FeedResponse<Item> response = await latestVersionIterator.ReadNextAsync();
+
+                if (response.StatusCode == HttpStatusCode.NotModified)
                 {
-                    FeedResponse<Item> items = await incrementalIterator.ReadNextAsync();
-                }
-                catch (CosmosException cosmosException) when (cosmosException.StatusCode == HttpStatusCode.NotModified)
-                {
-                    latestVersionContinuationToken = cosmosException.Headers.ContinuationToken;
-                    Console.WriteLine("Created ChangeFeedIterator to read the change feed in Latest Version mode.");
+                    latestVersionContinuationToken = response.ContinuationToken;
                     break;
                 }
             }
@@ -125,7 +122,7 @@ namespace AllVersionsAndDeletesChangeFeedDemo
                        id: deleteItemCounter.ToString());
                     Console.Write("-");
                 }
-                catch
+                catch (CosmosException cosmosException) when (cosmosException.StatusCode == HttpStatusCode.NotFound)
                 {
                     // Deleting by a random id that might not exist in the container will likely throw errors that are safe to ignore for this purpose
                 }
@@ -145,36 +142,29 @@ namespace AllVersionsAndDeletesChangeFeedDemo
 
             await Console.Out.WriteLineAsync("Press any key to stop.");
 
-            while (!Console.KeyAvailable)
+            while (latestVersionIterator.HasMoreResults)
             {
-                while (latestVersionIterator.HasMoreResults)
-                {
-                    try
-                    {
-                        FeedResponse<Item> items = await latestVersionIterator.ReadNextAsync();
+                FeedResponse<Item> response = await latestVersionIterator.ReadNextAsync();
 
-                        foreach (Item item in items)
-                        {
-                            // for any operation
-                            Console.WriteLine($"Change in item: {item.Id}. New price: {item.Price}.");
-                        }
-                        Thread.Sleep(2000);
-                        if (Console.KeyAvailable)
-                        {
-                            break;
-                        }
-                    }
-                    catch (CosmosException cosmosException)
+                if (response.StatusCode == HttpStatusCode.NotModified)
+                {
+                    latestVersionContinuationToken = response.ContinuationToken;
+                    Console.WriteLine($"No new changes");
+                } 
+                else
+                {
+                    foreach (Item item in response)
                     {
-                        latestVersionContinuationToken = cosmosException.Headers.ContinuationToken;
-                        Console.WriteLine($"No new changes");
-                        Thread.Sleep(3000);
-                        if (Console.KeyAvailable)
-                        {
-                            break;
-                        }
+                        // for any operation
+                        Console.WriteLine($"Change in item: {item.Id}. New price: {item.Price}.");
                     }
                 }
+
+                if (Console.KeyAvailable)
+                {
+                    break;
+                }
+                Thread.Sleep(1000);
             }
         }
 
@@ -187,59 +177,52 @@ namespace AllVersionsAndDeletesChangeFeedDemo
 
             Console.ReadKey(true);
 
-            FeedIterator<ItemWithMetadata> allVersionsIterator = container.GetChangeFeedIterator<ItemWithMetadata>(ChangeFeedStartFrom.ContinuationToken(allVersionsContinuationToken), ChangeFeedMode.FullFidelity, new ChangeFeedRequestOptions { PageSizeHint = 10 });
+            FeedIterator<dynamic> allVersionsIterator = container.GetChangeFeedIterator<dynamic>(ChangeFeedStartFrom.ContinuationToken(allVersionsContinuationToken), ChangeFeedMode.FullFidelity, new ChangeFeedRequestOptions { PageSizeHint = 10 });
 
             await Console.Out.WriteLineAsync("Press any key to stop.");
 
-            while (!Console.KeyAvailable)
+            while (allVersionsIterator.HasMoreResults)
             {
-                while (allVersionsIterator.HasMoreResults)
-                {
-                    try
-                    {
-                        FeedResponse<ItemWithMetadata> items = await allVersionsIterator.ReadNextAsync();
 
-                        foreach (ItemWithMetadata item in items)
+                FeedResponse<dynamic> response = await allVersionsIterator.ReadNextAsync();
+
+                if (response.StatusCode == HttpStatusCode.NotModified)
+                {
+                    allVersionsContinuationToken = response.ContinuationToken;
+                    Console.WriteLine($"No new changes");
+                }
+                else
+                {
+                    foreach (dynamic r in response)
+                    {
+                        // if operaiton is delete
+                        if (r.metadata.operationType == "delete")
                         {
-                            // if operaiton is delete
-                            if (item.metadata.operationType == "delete")
+                            Item item = r.previous.ToObject<Item>();
+
+                            if (r.metadata.timeToLiveExpired == true)
                             {
-                                if (item.metadata.timeToLiveExpired == true)
-                                {
-                                    Console.WriteLine($"Operation: {item.metadata.operationType} (due to TTL). Item id: {item.metadata.previousImage.Id}. Previous price: {item.metadata.previousImage.Price}");
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"Operation: {item.metadata.operationType} (not due to TTL). Item id: {item.metadata.previousImage.Id}. Previous price: {item.metadata.previousImage.Price}");
-                                }
+                                Console.WriteLine($"Operation: {r.metadata.operationType} (due to TTL). Item id: {item.Id}. Previous price: {item.Price}");
                             }
-                            //if operation is replace or insert
                             else
                             {
-                                if (item.metadata.previousImage == null)
-                                {
-                                    Console.WriteLine($"Operation: {item.metadata.operationType}. Item id: {item.Id}. Current price: {item.Price}");
-                                }
-                                else
-                                    Console.WriteLine($"Operation: {item.metadata.operationType}. Item id: {item.Id}. Current price: {item.Price}. Previous price: {item.metadata.previousImage.Price}");
+                                Console.WriteLine($"Operation: {r.metadata.operationType} (not due to TTL). Item id: {item.Id}. Previous price: {item.Price}");
                             }
                         }
-                        Thread.Sleep(2000);
-                        if (Console.KeyAvailable)
+                        //if operation is replace or insert
+                        else
                         {
-                            break;
+                            Item item = r.current.ToObject<Item>();
+
+                            Console.WriteLine($"Operation: {r.metadata.operationType}. Item id: {item.Id}. Current price: {item.Price}");
                         }
                     }
-                    catch (CosmosException cosmosException)
-                    {
-                        allVersionsContinuationToken = cosmosException.Headers.ContinuationToken;
-                        Console.WriteLine($"No new changes");
-                        Thread.Sleep(3000);
-                        if (Console.KeyAvailable)
-                        {
-                            break;
-                        }
-                    }
+                } 
+
+                Thread.Sleep(1000);
+                if (Console.KeyAvailable)
+                {
+                    break;
                 }
             }
         }
