@@ -8,7 +8,7 @@ namespace AllVersionsAndDeletesChangeFeedDemo.Models
         public Item Current { get; set; }
 
         [JsonProperty("previous")]
-        public Item? Previous { get; set; }
+        public Item Previous { get; set; }
 
         [JsonProperty("metadata")]
         public Metadata Metadata { get; set; }

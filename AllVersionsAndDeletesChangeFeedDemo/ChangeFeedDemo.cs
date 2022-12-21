@@ -177,14 +177,14 @@ namespace AllVersionsAndDeletesChangeFeedDemo
 
             Console.ReadKey(true);
 
-            FeedIterator<dynamic> allVersionsIterator = container.GetChangeFeedIterator<dynamic>(ChangeFeedStartFrom.ContinuationToken(allVersionsContinuationToken), ChangeFeedMode.FullFidelity, new ChangeFeedRequestOptions { PageSizeHint = 10 });
+            FeedIterator<AllVersionsAndDeletesCFRepsonse> allVersionsIterator = container.GetChangeFeedIterator<AllVersionsAndDeletesCFRepsonse>(ChangeFeedStartFrom.ContinuationToken(allVersionsContinuationToken), ChangeFeedMode.FullFidelity, new ChangeFeedRequestOptions { PageSizeHint = 10 });
 
             await Console.Out.WriteLineAsync("Press any key to stop.");
 
             while (allVersionsIterator.HasMoreResults)
             {
 
-                FeedResponse<dynamic> response = await allVersionsIterator.ReadNextAsync();
+                FeedResponse<AllVersionsAndDeletesCFRepsonse> response = await allVersionsIterator.ReadNextAsync();
 
                 if (response.StatusCode == HttpStatusCode.NotModified)
                 {
@@ -193,28 +193,28 @@ namespace AllVersionsAndDeletesChangeFeedDemo
                 }
                 else
                 {
-                    foreach (dynamic r in response)
+                    foreach (AllVersionsAndDeletesCFRepsonse r in response)
                     {
                         // if operaiton is delete
-                        if (r.metadata.operationType == "delete")
+                        if (r.Metadata.OperationType == "delete")
                         {
-                            Item item = r.previous.ToObject<Item>();
+                            Item item = r.Previous;
 
-                            if (r.metadata.timeToLiveExpired == true)
+                            if (r.Metadata.TimeToLiveExpired == true)
                             {
-                                Console.WriteLine($"Operation: {r.metadata.operationType} (due to TTL). Item id: {item.Id}. Previous price: {item.Price}");
+                                Console.WriteLine($"Operation: {r.Metadata.OperationType} (due to TTL). Item id: {item.Id}. Previous price: {item.Price}");
                             }
                             else
                             {
-                                Console.WriteLine($"Operation: {r.metadata.operationType} (not due to TTL). Item id: {item.Id}. Previous price: {item.Price}");
+                                Console.WriteLine($"Operation: {r.Metadata.OperationType} (not due to TTL). Item id: {item.Id}. Previous price: {item.Price}");
                             }
                         }
                         //if operation is replace or insert
                         else
                         {
-                            Item item = r.current.ToObject<Item>();
+                            Item item = r.Current;
 
-                            Console.WriteLine($"Operation: {r.metadata.operationType}. Item id: {item.Id}. Current price: {item.Price}");
+                            Console.WriteLine($"Operation: {r.Metadata.OperationType}. Item id: {item.Id}. Current price: {item.Price}");
                         }
                     }
                 } 

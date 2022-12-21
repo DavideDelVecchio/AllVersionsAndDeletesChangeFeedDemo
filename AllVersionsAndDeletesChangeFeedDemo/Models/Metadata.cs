@@ -8,6 +8,6 @@ namespace AllVersionsAndDeletesChangeFeedDemo.Models
         public string OperationType { get; set; }
 
         [JsonProperty("timeToLiveExpired")]
-        public Boolean? TimeToLiveExpired { get; set; }
+        public Boolean TimeToLiveExpired { get; set; }
     }
 }
